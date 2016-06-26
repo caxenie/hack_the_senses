@@ -45,14 +45,14 @@ dvs_brd.show_image()
 
 # initialize the audio system
 # recode the sound to mono and 22050
-check_call(['sox', 'outsnap.wav', '-r', '22050', '-c1', '-b', '16', 'inp.wav'])
+check_call(['sox', 'outsnap.wav', '-r', '44100', '-c1', '-b', '16', 'inp.wav'])
 # read the input
 rate, mono_sound = wavfile.read(file('inp.wav', 'rb'))
 # remove that tmp file
 os.remove('inp.wav')
 
 # check the mode {pre-recorded or on-the-fly HRTF}
-prerecorded = False
+prerecorded = True
 
 # encoding depth through volume
 m = alsaaudio.Mixer()
@@ -95,6 +95,12 @@ while True:
         data = sound.readframes(1024)
 
         while len(data) > 0:
+            # change volume depending on the probability
+            new_vol = int(40 + math.floor(10 * prob))
+            # clamp value to max allowed in ALSA
+            if new_vol > 100:
+                new_vol = 100
+            m.setvolume(new_vol)
             stream.write(data)
             data = sound.readframes(1024)
 
@@ -133,10 +139,7 @@ while True:
         data = sound.readframes(-1)
 
         while len(data) > 0:
-            # get current volume
-            vol = m.getvolume()
-            vol = int(vol[0])
-           # change volume depending on the probability
+            # change volume depending on the probability
             new_vol = int(40 + math.floor(10*prob))
             # clamp value to max allowed in ALSA
             if new_vol > 100:

@@ -9,6 +9,9 @@ import scipy.io.wavfile as wavfile
 from scipy.signal import lfilter
 
 import nstdvs
+from struct import pack
+import alsaaudio
+import math
 
 
 def readHRTF(name):
@@ -51,6 +54,10 @@ os.remove('inp.wav')
 # check the mode {pre-recorded or on-the-fly HRTF}
 prerecorded = False
 
+# encoding depth through volume
+m = alsaaudio.Mixer()
+
+
 while True:
     # enable py audio interface
     p = pyaudio.PyAudio()
@@ -58,10 +65,10 @@ while True:
     target_stim = np.array(tracker())
 
     # construct a metric for the probability density estimation
-    # TODO calibrate the sensor for various depths - coded in volume amplitude
-    calibration_range = [1, 5]  # metres
+    # calibrate the sensor for various depths - coded in volume amplitude
+    calibration_range = [0, 10]  # volume levels
     # probability modulates the volume cue (access the system volume)
-    prob = np.interp(target_stim[2], [0, 1], calibration_range)
+    prob = (np.interp(target_stim[2], [0, 100], calibration_range))
 
     # construct  a metric for elevation using the y axis
     elevation = np.interp(target_stim[1], [-1,1], [-40, 90])
@@ -123,12 +130,22 @@ while True:
                         rate=sound.getframerate(),
                         output=True)
         # read the data frames
-        data = sound.readframes(1024)
+        data = sound.readframes(-1)
 
         while len(data) > 0:
+            # get current volume
+            vol = m.getvolume()
+            vol = int(vol[0])
+           # change volume depending on the probability
+            new_vol = int(math.floor(10*prob))
+            # clamp value to max allowed in ALSA
+            if new_vol > 100:
+                new_vol = 100
+            m.setvolume(new_vol)
+            # output
             stream.write(data)
-            data = sound.readframes(1024)
-
+            data = sound.readframes(-1)
+        # cleanup
         stream.stop_stream()
         stream.close()
     # terminate the session

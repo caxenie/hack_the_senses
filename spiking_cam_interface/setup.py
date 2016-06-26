@@ -30,5 +30,5 @@ setup(
     description=description,
     long_description=long_description,
     requires=[
-    ],
+        'numpy', 'matplotlib', 'scipy', 'scipy', 'pyaudio',],
 )

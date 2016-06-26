@@ -137,7 +137,7 @@ while True:
             vol = m.getvolume()
             vol = int(vol[0])
            # change volume depending on the probability
-            new_vol = int(math.floor(10*prob))
+            new_vol = int(40 + math.floor(10*prob))
             # clamp value to max allowed in ALSA
             if new_vol > 100:
                 new_vol = 100

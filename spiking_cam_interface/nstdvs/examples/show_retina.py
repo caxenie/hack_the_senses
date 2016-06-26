@@ -48,21 +48,35 @@ rate, mono_sound = wavfile.read(file('inp.wav', 'rb'))
 os.remove('inp.wav')
 
 # check the mode {pre-recorded or on-the-fly HRTF}
-prerecorded = 1
+prerecorded = True
 
 while True:
     # enable py audio interface
     p = pyaudio.PyAudio()
     # get the position of the tracked stimulus
     target_stim = np.array(tracker())
+
+    # construct a metric for the probability density estimation
+    # TODO calibrate the sensor for varions depths - coded in volume amplitude
+    calibration_range = [1, 5]  # metres
+    # probability modulates the volume cue (access the system volume)
+    prob = np.interp(target_stim[2], [0, 1], calibration_range)
+
+    # TODO loop through all possible elevation values and nest the azimuth values
+    #  hrtf = readHRTF(os.path.join('elev0', 'H0e%03da.dat' % np.abs(azimuth)))
+
+    # construct  a metric for elevation using the y axis
+    elevation = np.interp(target_stim[1], [-1,1], [-40, 90])
+
+
     # interpolate and map to sound resolution
-    snd = np.interp(target_stim[0], [-1,1], [-90, 90])
+    azimuth = np.interp(target_stim[0], [-1,1], [-90, 90])
     resolution = 5
-    snd -=snd%resolution
+    azimuth -=azimuth%resolution
 
     # check the operation mode (pre-recorded soundscape or on-the-fly)
-    if prerecorded == 0:
-        sound = wave.open(file(os.path.join('soundscape', 'a%d.wav' % snd), 'rb'))
+    if prerecorded:
+        sound = wave.open(file(os.path.join('soundscape', 'a%d.wav' % azimuth), 'rb'))
         stream = p.open(format=p.get_format_from_width(sound.getsampwidth()),
                     channels=sound.getnchannels(),
                     rate=sound.getframerate(),
@@ -78,7 +92,7 @@ while True:
         stream.close()
     else:
         # choose the desired HRTF depending on the location on x axis (azimuth)
-        hrtf = readHRTF(os.path.join('elev0', 'H0e%03da.dat' % np.abs(snd)))
+        hrtf = readHRTF(os.path.join('elev0', 'H0e%03da.dat' % np.abs(azimuth)))
         # apply the filter
         left = lfilter(hrtf[:,1], 1.0, mono_sound)
         right = lfilter(hrtf[:,0], 1.0, mono_sound)
@@ -93,7 +107,7 @@ while True:
         wavfile.write('out.wav', rate, result_neg)
         check_call(['sox', 'out.wav', 'out_neg.wav'])
         # check where in the FOV we focus
-        if snd < 0:
+        if azimuth < 0:
             sound = wave.open('out_pos.wav','rb')
         else:
             sound = wave.open('out_neg.wav','rb')
@@ -113,4 +127,4 @@ while True:
         stream.close()
     # terminate the session
     p.terminate()
-    time.sleep(0.001)
+    time.sleep(1)

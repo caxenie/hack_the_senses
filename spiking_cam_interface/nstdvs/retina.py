@@ -55,7 +55,7 @@ class Retina(nstdvs.NSTdvs):
             self.retina_packet_size = None
         self.connection.send(cmd)
 
-    def show_image(self, decay=0.5, display_mode='quick'):
+    def show_image(self, decay=0.5, display_mode='ubuntu_quick'):
         if self.image is None:
             self.image = np.zeros((128, 128), dtype=float)
             thread = threading.Thread(target=self.image_loop,
@@ -279,8 +279,8 @@ class Retina(nstdvs.NSTdvs):
                 for j in np.where(w > eta * 0.1)[0]:
                         px += w[j] * (x[j] - px)
                         py += w[j] * (y[j] - py)
-                self.p_x[i] = px
-                self.p_y[i] = py
+                self.p_x[i] = py
+                self.p_y[i] = px
 
                 '''
                 # faster, but less accurate method:

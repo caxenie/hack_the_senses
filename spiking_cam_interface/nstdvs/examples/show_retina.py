@@ -1,14 +1,15 @@
-import nstdvs
-import time
 import numpy as np
-import matplotlib.pyplot as plt
+import os
+import time
+import wave
+from subprocess import check_call
+
+import pyaudio
 import scipy.io.wavfile as wavfile
 from scipy.signal import lfilter
-from subprocess import check_call
-import sys
-import os
-import wave
-import pyaudio
+
+import nstdvs
+
 
 def readHRTF(name):
     r = np.fromfile(file(name, 'rb'), np.dtype('>i2'), 256)
@@ -26,8 +27,8 @@ def tracker():
     dvs[np.isnan(dvs)]=np.zeros(len(dvs[np.isnan(dvs)]))
     xpos = dvs[0] # stimulus on x axis will be used in azimuth mapping
     ypos = dvs[1] # stimulus on y axis will be used in elevation mapping
-    prob = dvs[2] # likelihood that it is the stimulus as a way to filter
-    return [xpos, ypos, prob]
+    probability = dvs[2] # likelihood that it is the stimulus as a way to filter
+    return [xpos, ypos, probability]
 
 # initialize vision subsystem
 dvs_brd = nstdvs.DVSBoard()
@@ -48,7 +49,7 @@ rate, mono_sound = wavfile.read(file('inp.wav', 'rb'))
 os.remove('inp.wav')
 
 # check the mode {pre-recorded or on-the-fly HRTF}
-prerecorded = True
+prerecorded = False
 
 while True:
     # enable py audio interface
@@ -57,26 +58,28 @@ while True:
     target_stim = np.array(tracker())
 
     # construct a metric for the probability density estimation
-    # TODO calibrate the sensor for varions depths - coded in volume amplitude
+    # TODO calibrate the sensor for various depths - coded in volume amplitude
     calibration_range = [1, 5]  # metres
     # probability modulates the volume cue (access the system volume)
     prob = np.interp(target_stim[2], [0, 1], calibration_range)
 
-    # TODO loop through all possible elevation values and nest the azimuth values
-    #  hrtf = readHRTF(os.path.join('elev0', 'H0e%03da.dat' % np.abs(azimuth)))
-
     # construct  a metric for elevation using the y axis
     elevation = np.interp(target_stim[1], [-1,1], [-40, 90])
+    # remap to the number of elevations we measured with the dummy 14 slices in elevation from -40 to 90 degrees
+    # expert says 10 is better than 14 to make a clean detection at high elevation
+    elev_hrtf = round(np.interp(elevation, [-40, 90], [1, 10]))
 
+    # loop through all possible elevation values and nest the azimuth values
+    azimuth_span = len(os.listdir(os.path.join('hrtf_elev', '%d' % elev_hrtf)))
 
     # interpolate and map to sound resolution
-    azimuth = np.interp(target_stim[0], [-1,1], [-90, 90])
-    resolution = 5
-    azimuth -=azimuth%resolution
+
+    # azimuth values are spanning between -90 to 90 but we remap to the number of slices (+/- azimuth span)
+    azimuth = round(np.interp(target_stim[0], [-1,1], [-azimuth_span, azimuth_span]))
 
     # check the operation mode (pre-recorded soundscape or on-the-fly)
     if prerecorded:
-        sound = wave.open(file(os.path.join('soundscape', 'a%d.wav' % azimuth), 'rb'))
+        sound = wave.open(file(os.path.join('soundscape', '%d' % elev_hrtf, 'a%d.wav' % azimuth), 'rb'))
         stream = p.open(format=p.get_format_from_width(sound.getsampwidth()),
                     channels=sound.getnchannels(),
                     rate=sound.getframerate(),
@@ -92,7 +95,10 @@ while True:
         stream.close()
     else:
         # choose the desired HRTF depending on the location on x axis (azimuth)
-        hrtf = readHRTF(os.path.join('elev0', 'H0e%03da.dat' % np.abs(azimuth)))
+        # remap the azimuth index to match the increasing index
+        # noinspection PyTypeChecker
+        az_idx = round(np.interp(azimuth, [-azimuth_span, azimuth_span], [1, azimuth_span]))
+        hrtf = readHRTF(os.path.join('hrtf_elev', '%d' % elev_hrtf, '%d.dat' % az_idx))
         # apply the filter
         left = lfilter(hrtf[:,1], 1.0, mono_sound)
         right = lfilter(hrtf[:,0], 1.0, mono_sound)
@@ -127,4 +133,5 @@ while True:
         stream.close()
     # terminate the session
     p.terminate()
-    time.sleep(1)
+    # processing delay
+    time.sleep(0.5)

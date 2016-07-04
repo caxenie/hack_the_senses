@@ -1,4 +1,4 @@
-# Repository for the Hack the Senses Hackaton 2016 #
+# Repository for the Hack the Senses Hackaton, Fablab London, 2016 #
 
 ## Hearing motion synesthesia ##
 
